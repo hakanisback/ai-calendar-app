@@ -10,107 +10,79 @@ on:
 
 jobs:
   deploy:
-    # Use the latest version of Ubuntu as the runner
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Check out the repository code
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      # 2. Set up the Node.js environment
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20' # Use a recent LTS version of Node.js
-          cache: 'npm' # Cache npm packages to speed up future builds
-
-      # 3. Install project dependencies
-      - name: Install dependencies
-        run: npm ci
-
-      # 4. Create Google Cloud credentials file
-      - name: Create GCP Credentials File
-        run: echo "${{ secrets.GCP_CREDENTIALS_JSON }}" > gcp-credentials.json
-
-      # 5. Create Firebase credentials file for the build
-      - name: Create Firebase Credentials File
-        run: |
-          cat <<EOF > ./firebase-credentials.json
-          ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
-          EOF
-
-      # 6. Create .env.local file for the build
-      - name: Create .env.local
-        run: |
-          echo "GCP_CREDENTIALS_JSON='${{ secrets.GCP_CREDENTIALS_JSON }}'" > .env.local
-          echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}" >> .env.local
-          echo "NEXT_PUBLIC_GOOGLE_PROJECT_ID=${{ secrets.NEXT_PUBLIC_GOOGLE_PROJECT_ID }}" >> .env.local
-          echo "GOOGLE_APPLICATION_CREDENTIALS=./gcp-credentials.json" >> .env.local
-          echo "FIREBASE_CREDENTIALS_PATH=./firebase-credentials.json" >> .env.local
-          echo "NEXT_PUBLIC_FIREBASE_API_KEY=${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}" >> .env.local
-          echo "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}" >> .env.local
-          echo "NEXT_PUBLIC_FIREBASE_PROJECT_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}" >> .env.local
-          echo "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}" >> .env.local
-          echo "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}" >> .env.local
-          echo "NEXT_PUBLIC_FIREBASE_APP_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}" >> .env.local
-          echo "AUTH_SECRET=${{ secrets.AUTH_SECRET }}" >> .env.local
-
-      # 7. Build the Next.js application
-      - name: Build application
-        run: npm run build
-
-      # 6. Deploy the build files to the VPS using rsync for efficiency
-      - name: Deploy to VPS
-        uses: easingthemes/ssh-deploy@v5.0.0
-        with:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          ARGS: "-rltgoDzvO --delete"
-          SOURCE: ".next/"
-          REMOTE_HOST: ${{ secrets.HOST }}
-          REMOTE_USER: ${{ secrets.USERNAME }}
-          TARGET: "/var/www/sirschedule.com/.next/"
-
-      # 7. Install production dependencies and restart the app on the VPS
       - name: Deploy to Production Server
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
           script: |
-            set -e # Exit immediately if a command exits with a non-zero status.
+            set -e
+            export PROJECT_DIR="/var/www/sirschedule.com"
+            export GIT_REPO="https://github.com/hakanisback/ai-calendar-app.git"
 
-            echo "Navigating to project directory..."
-            cd /var/www/sirschedule.com
+            echo "### Checking if project directory exists... ###"
+            if [ -d "$PROJECT_DIR/.git" ]; then
+              echo "Directory is a git repository. Pulling latest changes."
+              cd $PROJECT_DIR
+              git pull origin main
+            else
+              echo "Directory is not a git repository. Re-cloning..."
+              rm -rf $PROJECT_DIR
+              git clone $GIT_REPO $PROJECT_DIR
+              cd $PROJECT_DIR
+            fi
 
-            echo "Creating environment files..."
+            echo "### Creating environment files... ###"
+            echo "Creating firebase-credentials.json..."
             echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}" > firebase-credentials.json
+            
+            echo "Creating .env.local..."
             cat << EOF > .env.local
-            FIREBASE_CREDENTIALS_PATH=/var/www/sirschedule.com/firebase-credentials.json
+            AUTH_SECRET=${{ secrets.AUTH_SECRET }}
             GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
             GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
-            AUTH_SECRET=${{ secrets.AUTH_SECRET }}
-            NEXTAUTH_URL=http://sirschedule.com
             NEXT_PUBLIC_FIREBASE_API_KEY=${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
             NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
             NEXT_PUBLIC_FIREBASE_PROJECT_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
             NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
             NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
             NEXT_PUBLIC_FIREBASE_APP_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
+            FIREBASE_CREDENTIALS_PATH=/var/www/sirschedule.com/firebase-credentials.json
             EOF
 
-            echo "Pulling latest changes from git..."
-            git checkout -f main
-            git pull origin main
-
-            echo "Installing dependencies..."
+            echo "### Installing dependencies... ###"
             npm install --production
 
-            echo "Building application..."
+            echo "### Building the application... ###"
             npm run build
 
-            echo "Reloading application with PM2..."
-            pm2 reload ecosystem.config.js --env production
+            echo "### Reloading application with PM2... ###"
+            if [ ! -f ecosystem.config.js ]; then
+              echo "Creating basic ecosystem.config.js..."
+              cat << ECF > ecosystem.config.js
+              module.exports = {
+                apps: [
+                  {
+                    name: 'ai-calendar',
+                    script: 'node_modules/.bin/next',
+                    args: 'start',
+                    env_production: {
+                      NODE_ENV: 'production'
+                    }
+                  }
+                ]
+              };
+              ECF
+              echo "Starting app with PM2..."
+              pm2 start ecosystem.config.js --env production
+            else
+              echo "Reloading app with PM2..."
+              pm2 reload ecosystem.config.js --env production
+            fi
 
-            echo "Deployment complete!"
+            echo "Deployment finished successfully!"
