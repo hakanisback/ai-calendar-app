@@ -51,7 +51,8 @@ jobs:
           echo "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}" >> .env.local
           echo "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}" >> .env.local
           echo "NEXT_PUBLIC_FIREBASE_APP_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}" >> .env.local
-          echo "FIREBASE_SERVICE_ACCOUNT_JSON=${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}" >> .env.local
+          echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}" > firebase-credentials.json
+          echo "FIREBASE_SERVICE_ACCOUNT_JSON=$(cat firebase-credentials.json)" >> .env.local
 
       # 7. Build the Next.js application
       - name: Build application
