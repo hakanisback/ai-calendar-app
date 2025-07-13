@@ -72,33 +72,26 @@ jobs:
           TARGET: "/var/www/sirschedule.com/.next/"
 
       # 7. Install production dependencies and restart the app on the VPS
-      - name: Copy ecosystem config file
-        uses: appleboy/scp-action@v1.0.0
-        with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "ecosystem.config.js"
-          target: "/var/www/sirschedule.com"
-
-      - name: Setup production environment and restart server
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Deploy to Production Server
+        uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            set -e # Exit immediately if a command exits with a non-zero status.
+
+            echo "Navigating to project directory..."
             cd /var/www/sirschedule.com
 
-            # Create the .env.local file for production. Next.js automatically loads this.
-            cat <<EOF > ./.env.local
-            AUTH_SECRET=${{ secrets.AUTH_SECRET }}
+            echo "Creating environment files..."
+            echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}" > firebase-credentials.json
+            cat << EOF > .env.local
             FIREBASE_CREDENTIALS_PATH=/var/www/sirschedule.com/firebase-credentials.json
-            # The rest of your environment variables...
-            GCP_CREDENTIALS_JSON='${{ secrets.GCP_CREDENTIALS_JSON }}'
-            GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}
-            NEXT_PUBLIC_GOOGLE_PROJECT_ID=${{ secrets.NEXT_PUBLIC_GOOGLE_PROJECT_ID }}
-            GOOGLE_APPLICATION_CREDENTIALS=/var/www/sirschedule.com/gcp-credentials.json
+            GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+            GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
+            AUTH_SECRET=${{ secrets.AUTH_SECRET }}
+            NEXTAUTH_URL=http://sirschedule.com
             NEXT_PUBLIC_FIREBASE_API_KEY=${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
             NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
             NEXT_PUBLIC_FIREBASE_PROJECT_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
@@ -107,11 +100,17 @@ jobs:
             NEXT_PUBLIC_FIREBASE_APP_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
             EOF
 
-            # Create the Firebase credentials file from the secret
-            cat <<EOF > ./firebase-credentials.json
-            ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
-            EOF
+            echo "Pulling latest changes from git..."
+            git checkout -f main
+            git pull origin main
 
-            # Install dependencies and restart with the ecosystem file
+            echo "Installing dependencies..."
             npm install --production
-            pm2 startOrRestart ecosystem.config.js --env production
+
+            echo "Building application..."
+            npm run build
+
+            echo "Reloading application with PM2..."
+            pm2 reload ecosystem.config.js --env production
+
+            echo "Deployment complete!"

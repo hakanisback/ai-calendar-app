@@ -27,7 +27,7 @@ const debug = process.env.NODE_ENV === 'development';
 export const authConfig: NextAuthConfig = {
   basePath: '/api/auth',
   trustHost: true,
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: process.env.AUTH_SECRET,
   session: {
     strategy: 'jwt',
     maxAge: 30 * 24 * 60 * 60, // 30 days
@@ -145,15 +145,8 @@ export const authConfig: NextAuthConfig = {
   }
 };
 
-// Initialize NextAuth with our config
-const authInstance = NextAuth(authConfig);
-
-// Export the auth handlers and functions
-export const { handlers, auth } = authInstance;
-
-// Export individual methods for convenience
-export const signIn = authInstance.signIn;
-export const signOut = authInstance.signOut;
+// Initialize NextAuth with our config and export the handlers
+export const { handlers, signIn, signOut, auth } = NextAuth(authConfig);
 
 // Export auth options for API routes
 export const authOptions = authConfig;
