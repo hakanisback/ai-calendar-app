@@ -33,26 +33,27 @@ jobs:
       - name: Create GCP Credentials File
         run: echo "${{ secrets.GCP_CREDENTIALS_JSON }}" > gcp-credentials.json
 
-      # 5. Create Firebase service account key
-      - name: Create Firebase Service Account Key
+      # 5. Create Firebase credentials file for the build
+      - name: Create Firebase Credentials File
         run: |
-          mkdir -p config
-          echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}" > config/serviceAccountKey.json
+          cat <<EOF > ./firebase-credentials.json
+          ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          EOF
 
       # 6. Create .env.local file for the build
       - name: Create .env.local
         run: |
-          echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}" > .env.local
+          echo "GCP_CREDENTIALS_JSON='${{ secrets.GCP_CREDENTIALS_JSON }}'" > .env.local
+          echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}" >> .env.local
           echo "NEXT_PUBLIC_GOOGLE_PROJECT_ID=${{ secrets.NEXT_PUBLIC_GOOGLE_PROJECT_ID }}" >> .env.local
           echo "GOOGLE_APPLICATION_CREDENTIALS=./gcp-credentials.json" >> .env.local
+          echo "FIREBASE_CREDENTIALS_PATH=./firebase-credentials.json" >> .env.local
           echo "NEXT_PUBLIC_FIREBASE_API_KEY=${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}" >> .env.local
           echo "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}" >> .env.local
           echo "NEXT_PUBLIC_FIREBASE_PROJECT_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}" >> .env.local
           echo "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}" >> .env.local
           echo "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}" >> .env.local
           echo "NEXT_PUBLIC_FIREBASE_APP_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}" >> .env.local
-          echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}" > firebase-credentials.json
-          echo "FIREBASE_CREDENTIALS_PATH=./firebase-credentials.json" >> .env.local
           echo "AUTH_SECRET=${{ secrets.AUTH_SECRET }}" >> .env.local
 
       # 7. Build the Next.js application
