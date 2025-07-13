@@ -1,0 +1,61 @@
+# GitHub Actions workflow to build and deploy the Next.js application to a VPS
+
+name: Deploy to VPS
+
+# This workflow runs on any push to the 'main' branch
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    # Use the latest version of Ubuntu as the runner
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Check out the repository code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Set up the Node.js environment
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # Use a recent LTS version of Node.js
+          cache: 'npm' # Cache npm packages to speed up future builds
+
+      # 3. Install project dependencies
+      - name: Install dependencies
+        run: npm ci
+
+      # 4. Create the .env.local file from a GitHub secret for the build process
+      - name: Create .env.local
+        run: echo "${{ secrets.ENV_FILE_CONTENT }}" > .env.local
+
+      # 5. Build the Next.js application
+      - name: Build application
+        run: npm run build
+
+      # 6. Deploy the build files to the VPS using rsync for efficiency
+      - name: Deploy to VPS
+        uses: easingthemes/ssh-deploy@v5.0.0
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          ARGS: "-rltgoDzvO --delete"
+          SOURCE: ".next/"
+          REMOTE_HOST: ${{ secrets.HOST }}
+          REMOTE_USER: ${{ secrets.USERNAME }}
+          TARGET: "/var/www/sirschedule.com/.next/"
+
+      # 7. Install production dependencies and restart the app on the VPS
+      - name: Install dependencies and restart server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /var/www/sirschedule.com
+            npm install --production
+            pm2 restart sirschedule-app

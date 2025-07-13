@@ -1,0 +1,18 @@
+# Ignore common directories
+node_modules
+.next
+out
+dist
+build
+coverage
+__tests__
+
+# Ignore test files
+**/*.test.*
+**/*.spec.*
+**/*.stories.*
+
+# Ignore example and script directories
+examples
+scripts
+test
