@@ -53,6 +53,7 @@ jobs:
           echo "NEXT_PUBLIC_FIREBASE_APP_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}" >> .env.local
           echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}" > firebase-credentials.json
           echo "FIREBASE_SERVICE_ACCOUNT_JSON=$(cat firebase-credentials.json)" >> .env.local
+          echo "AUTH_SECRET=${{ secrets.AUTH_SECRET }}" >> .env.local
 
       # 7. Build the Next.js application
       - name: Build application
