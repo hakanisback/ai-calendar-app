@@ -72,7 +72,16 @@ jobs:
           TARGET: "/var/www/sirschedule.com/.next/"
 
       # 7. Install production dependencies and restart the app on the VPS
-      - name: Install dependencies and restart server
+      - name: Copy ecosystem config file
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "ecosystem.config.js"
+          target: "/var/www/sirschedule.com"
+
+      - name: Setup production environment and restart server
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.HOST }}
@@ -80,5 +89,29 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /var/www/sirschedule.com
+
+            # Create the .env.local file for production. Next.js automatically loads this.
+            cat <<EOF > ./.env.local
+            AUTH_SECRET=${{ secrets.AUTH_SECRET }}
+            FIREBASE_CREDENTIALS_PATH=/var/www/sirschedule.com/firebase-credentials.json
+            # The rest of your environment variables...
+            GCP_CREDENTIALS_JSON='${{ secrets.GCP_CREDENTIALS_JSON }}'
+            GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}
+            NEXT_PUBLIC_GOOGLE_PROJECT_ID=${{ secrets.NEXT_PUBLIC_GOOGLE_PROJECT_ID }}
+            GOOGLE_APPLICATION_CREDENTIALS=/var/www/sirschedule.com/gcp-credentials.json
+            NEXT_PUBLIC_FIREBASE_API_KEY=${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+            NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+            NEXT_PUBLIC_FIREBASE_PROJECT_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+            NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+            NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+            NEXT_PUBLIC_FIREBASE_APP_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
+            EOF
+
+            # Create the Firebase credentials file from the secret
+            cat <<EOF > ./firebase-credentials.json
+            ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+            EOF
+
+            # Install dependencies and restart with the ecosystem file
             npm install --production
-            pm2 restart sirschedule-app
+            pm2 startOrRestart ecosystem.config.js --env production

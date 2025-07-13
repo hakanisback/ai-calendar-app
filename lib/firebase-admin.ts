@@ -31,14 +31,10 @@ try {
       }
     }
     // 3. Try to load from local file (for local development)
-    else {
-      const localPath = path.join(process.cwd(), 'config', 'serviceAccountKey.json');
-      if (fs.existsSync(localPath)) {
-        console.log(`Using local service account file: ${localPath}`);
-        serviceAccount = JSON.parse(fs.readFileSync(localPath, 'utf8'));
-      } else {
-        console.log('Firebase Admin: No service account credentials found. Please set FIREBASE_CREDENTIALS_PATH, FIREBASE_SERVICE_ACCOUNT_JSON, or place serviceAccountKey.json in /config.');
-      }
+    const localPath = path.resolve('config/serviceAccountKey.json');
+    if (fs.existsSync(localPath)) {
+      console.log(`Using local development service account file: ${localPath}`);
+      serviceAccount = JSON.parse(fs.readFileSync(localPath, 'utf8'));
     }
 
     if (serviceAccount) {
