@@ -13,34 +13,39 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to Production Server
+      # 1. Checkout the repository to access the code
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 2. Set up Node.js environment
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # 3. Install dependencies reliably
+      - name: Install Dependencies
+        run: npm install
+
+      # 4. Build the Next.js application
+      - name: Build Application
+        run: npm run build
+
+      # 5. Prepare server and create environment files
+      - name: Prepare Server and Create Env Files
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
           script: |
             set -e
-            export PROJECT_DIR="/var/www/sirschedule.com"
-            export GIT_REPO="https://github.com/hakanisback/ai-calendar-app.git"
-
-            echo "### Checking if project directory exists... ###"
-            if [ -d "$PROJECT_DIR/.git" ]; then
-              echo "Directory is a git repository. Pulling latest changes."
-              cd $PROJECT_DIR
-              git pull origin main
-            else
-              echo "Directory is not a git repository. Re-cloning..."
-              rm -rf $PROJECT_DIR
-              git clone $GIT_REPO $PROJECT_DIR
-              cd $PROJECT_DIR
-            fi
-
-            echo "### Creating environment files... ###"
+            export TARGET_DIR="/var/www/sirschedule.com"
+            mkdir -p $TARGET_DIR
+            cd $TARGET_DIR
             echo "Creating firebase-credentials.json..."
             echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}" > firebase-credentials.json
-            
             echo "Creating .env.local..."
             cat << EOF > .env.local
             AUTH_SECRET=${{ secrets.AUTH_SECRET }}
@@ -55,34 +60,27 @@ jobs:
             FIREBASE_CREDENTIALS_PATH=/var/www/sirschedule.com/firebase-credentials.json
             EOF
 
-            echo "### Installing dependencies... ###"
-            npm install --production
+      # 6. Securely copy application files to the server
+      - name: Copy Application Files
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: ".next,node_modules,package.json,public,ecosystem.config.js"
+          target: "/var/www/sirschedule.com"
+          strip_components: 0
 
-            echo "### Building the application... ###"
-            npm run build
-
-            echo "### Reloading application with PM2... ###"
-            if [ ! -f ecosystem.config.js ]; then
-              echo "Creating basic ecosystem.config.js..."
-              cat << ECF > ecosystem.config.js
-              module.exports = {
-                apps: [
-                  {
-                    name: 'ai-calendar',
-                    script: 'node_modules/.bin/next',
-                    args: 'start',
-                    env_production: {
-                      NODE_ENV: 'production'
-                    }
-                  }
-                ]
-              };
-              ECF
-              echo "Starting app with PM2..."
-              pm2 start ecosystem.config.js --env production
-            else
-              echo "Reloading app with PM2..."
-              pm2 reload ecosystem.config.js --env production
-            fi
-
-            echo "Deployment finished successfully!"
+      # 7. Restart the application on the server using PM2
+      - name: Restart Application
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd /var/www/sirschedule.com
+            echo "Reloading application with PM2..."
+            pm2 reload sirschedule-app || pm2 start ecosystem.config.js
+            echo "Deployment successful!"
