@@ -29,11 +29,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # 4. Create the .env.local file from a GitHub secret for the build process
-      - name: Create .env.local
-        run: echo "${{ secrets.ENV_FILE_CONTENT }}" > .env.local
+      # 4. Create Google Cloud credentials file
+      - name: Create GCP Credentials File
+        run: echo "${{ secrets.GCP_CREDENTIALS_JSON }}" > gcp-credentials.json
 
-      # 5. Build the Next.js application
+      # 5. Create .env.local file for the build
+      - name: Create .env.local
+        run: |
+          echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}" > .env.local
+          echo "NEXT_PUBLIC_GOOGLE_PROJECT_ID=${{ secrets.NEXT_PUBLIC_GOOGLE_PROJECT_ID }}" >> .env.local
+          echo "GOOGLE_APPLICATION_CREDENTIALS=./gcp-credentials.json" >> .env.local
+
+      # 6. Build the Next.js application
       - name: Build application
         run: npm run build
 
