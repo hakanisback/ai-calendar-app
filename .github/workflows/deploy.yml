@@ -29,23 +29,24 @@ jobs:
 
       # 3. Install dependencies reliably
       - name: Install Dependencies
-        run: npm install
+        run: npm ci
 
       # 4. Build the Next.js application
       - name: Build Application
         env:
           NEXTAUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+          NEXTAUTH_URL: https://sirschedule.com
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
           NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
-          NEXT_PUBLIC_GOOGLE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_GOOGLE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
           NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
           NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
           NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/google-credentials.json
+          FIREBASE_CLIENT_EMAIL: firebase-adminsdk-fbsvc@sirschedule-main.iam.gserviceaccount.com
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
         run: |
-          echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}" > ${{ github.workspace }}/google-credentials.json
           npm run build
 
       # 5. Prepare server and create environment files
@@ -60,11 +61,10 @@ jobs:
             export TARGET_DIR="/var/www/sirschedule.com"
             mkdir -p $TARGET_DIR
             cd $TARGET_DIR
-            echo "Creating firebase-credentials.json..."
-            echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}" > firebase-credentials.json
             echo "Creating .env.local..."
-            cat << EOF > .env.local
+            cat << 'EOF' > .env.local
             NEXTAUTH_SECRET=${{ secrets.AUTH_SECRET }}
+            NEXTAUTH_URL=https://sirschedule.com
             GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
             GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
             NEXT_PUBLIC_FIREBASE_API_KEY=${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
@@ -73,7 +73,8 @@ jobs:
             NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
             NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
             NEXT_PUBLIC_FIREBASE_APP_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
-            FIREBASE_CREDENTIALS_PATH=/var/www/sirschedule.com/firebase-credentials.json
+            FIREBASE_CLIENT_EMAIL=firebase-adminsdk-fbsvc@sirschedule-main.iam.gserviceaccount.com
+            FIREBASE_PRIVATE_KEY='${{ secrets.FIREBASE_PRIVATE_KEY }}'
             EOF
 
       # 6. Securely copy application files to the server
@@ -83,12 +84,12 @@ jobs:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: ".next,node_modules,package.json,public,ecosystem.config.js"
+          source: ".next,node_modules,package.json,package-lock.json,public,ecosystem.config.js"
           target: "/var/www/sirschedule.com"
           strip_components: 0
 
-      # 7. Restart the application on the server using PM2
-      - name: Restart Application
+      # 7. Install production dependencies and restart the application
+      - name: Setup and Restart Application
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.HOST }}
@@ -97,6 +98,13 @@ jobs:
           script: |
             set -e
             cd /var/www/sirschedule.com
-            echo "Reloading application with PM2..."
-            pm2 reload sirschedule-app || pm2 start ecosystem.config.js
+            echo "Installing production dependencies..."
+            npm ci --production
+            echo "Setting file permissions..."
+            chmod -R 755 .
+            echo "Restarting application..."
+            pm2 delete sirschedule-app 2> /dev/null || true
+            pm2 start ecosystem.config.js
+            pm2 save
+            pm2 startup | grep -v "sudo" | bash
             echo "Deployment successful!"
