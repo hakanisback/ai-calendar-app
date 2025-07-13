@@ -33,14 +33,26 @@ jobs:
       - name: Create GCP Credentials File
         run: echo "${{ secrets.GCP_CREDENTIALS_JSON }}" > gcp-credentials.json
 
-      # 5. Create .env.local file for the build
+      # 5. Create Firebase service account key
+      - name: Create Firebase Service Account Key
+        run: |
+          mkdir -p config
+          echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}" > config/serviceAccountKey.json
+
+      # 6. Create .env.local file for the build
       - name: Create .env.local
         run: |
           echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}" > .env.local
           echo "NEXT_PUBLIC_GOOGLE_PROJECT_ID=${{ secrets.NEXT_PUBLIC_GOOGLE_PROJECT_ID }}" >> .env.local
           echo "GOOGLE_APPLICATION_CREDENTIALS=./gcp-credentials.json" >> .env.local
+          echo "NEXT_PUBLIC_FIREBASE_API_KEY=${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}" >> .env.local
+          echo "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}" >> .env.local
+          echo "NEXT_PUBLIC_FIREBASE_PROJECT_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}" >> .env.local
+          echo "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}" >> .env.local
+          echo "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}" >> .env.local
+          echo "NEXT_PUBLIC_FIREBASE_APP_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}" >> .env.local
 
-      # 6. Build the Next.js application
+      # 7. Build the Next.js application
       - name: Build application
         run: npm run build
 
