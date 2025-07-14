@@ -3,7 +3,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { requireAuth } from '@/lib/auth-utils';
 
 // Initialize the Google Generative AI client
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || '');
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || '');
 
 export const maxDuration = 30; // 30 seconds max for AI processing
 export const dynamic = 'force-dynamic';
